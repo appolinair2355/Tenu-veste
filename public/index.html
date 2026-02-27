@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PatternCut Pro - Générateur de Plans de Coupe</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+        .serif { font-family: 'Playfair Display', serif; }
+        .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2); }
+        .pattern-canvas { background-image: linear-gradient(rgba(200,200,200,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(200,200,200,0.3) 1px, transparent 1px); background-size: 20px 20px; background-color: #fafafa; }
+        .upload-zone { border: 3px dashed #cbd5e1; transition: all 0.3s ease; }
+        .upload-zone:hover, .upload-zone.dragover { border-color: #667eea; background: rgba(102, 126, 234, 0.05); transform: scale(1.02); }
+        .pattern-piece { transition: all 0.3s ease; cursor: pointer; }
+        .pattern-piece:hover { filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2)); transform: translateY(-2px); }
+        .bg-grid { background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.15) 1px, transparent 0); background-size: 40px 40px; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-slide-in { animation: slideIn 0.6s ease-out forwards; }
+        .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-grid">
+    <nav class="glass fixed w-full z-50 top-0 border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">P</div>
+                    <span class="serif text-2xl font-bold text-gray-800">PatternCut Pro</span>
+                </div>
+                <div class="hidden md:flex space-x-8">
+                    <button onclick="showSection('create')" class="nav-btn text-gray-700 hover:text-purple-600 font-medium transition">Nouveau Modèle</button>
+                    <button onclick="showSection('library')" class="nav-btn text-gray-700 hover:text-purple-600 font-medium transition">Bibliothèque</button>
+                    <button onclick="showSection('guide')" class="nav-btn text-gray-700 hover:text-purple-600 font-medium transition">Guide</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+        <section id="hero" class="text-center mb-12 animate-slide-in">
+            <h1 class="serif text-5xl md:text-6xl font-bold text-white mb-6 leading-tight">
+                Créez vos plans de coupe<br>
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-pink-300">intelligemment</span>
+            </h1>
+            <p class="text-xl text-gray-200 max-w-2xl mx-auto mb-8">
+                Importez vos modèles, définissez vos mesures, et laissez notre algorithme générer automatiquement les plans de coupe détaillés avec instructions pas à pas.
+            </p>
+            <button onclick="showSection('create')" class="bg-white text-purple-600 px-8 py-4 rounded-full font-bold text-lg shadow-2xl hover:shadow-3xl hover:scale-105 transition transform">Commencer un projet →</button>
+        </section>
+
+        <section id="create-section" class="hidden">
+            <div class="grid lg:grid-cols-2 gap-8">
+                <div class="glass rounded-2xl p-8 shadow-2xl animate-slide-in">
+                    <h2 class="serif text-3xl font-bold text-gray-800 mb-6">Nouveau Modèle</h2>
+                    <form id="pattern-form" class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Nom du modèle</label>
+                            <input type="text" id="model-name" placeholder="Ex: Robe été fleurie" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition" required>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Catégorie</label>
+                            <select id="category" onchange="updateSubcategories()" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition">
+                                <option value="">Choisir une catégorie...</option>
+                                <option value="robe">Robe</option>
+                                <option value="haut">Haut / Chemise</option>
+                                <option value="pantalon">Pantalon</option>
+                                <option value="jupe">Jupe</option>
+                                <option value="ensemble">Ensemble (2 pièces)</option>
+                                <option value="veste">Veste / Manteau</option>
+                            </select>
+                        </div>
+
+                        <div id="subcategory-container" class="hidden">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Type spécifique</label>
+                            <select id="subcategory" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"></select>
+                        </div>
+
+                        <div class="bg-purple-50 rounded-xl p-6 border border-purple-100">
+                            <h3 class="font-bold text-purple-900 mb-4 flex items-center">
+                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                                Mesures (en cm)
+                            </h3>
+                            <div class="grid grid-cols-2 gap-4" id="measurements-grid"></div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Photo du modèle</label>
+                            <div class="upload-zone rounded-xl p-8 text-center cursor-pointer" id="upload-zone">
+                                <input type="file" id="photo-upload" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+                                <div id="upload-placeholder">
+                                    <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" stroke="currentColor" fill="none" viewBox="0 0 48 48"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                    <p class="text-gray-600">Glissez une photo ou cliquez pour importer</p>
+                                    <p class="text-sm text-gray-400 mt-2">PNG, JPG jusqu'à 10MB</p>
+                                </div>
+                                <img id="preview-image" class="hidden max-h-64 mx-auto rounded-lg shadow-lg" />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Type de tissu</label>
+                            <select id="fabric-type" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition">
+                                <option value="coton">Coton</option>
+                                <option value="soie">Soie / Satin</option>
+                                <option value="jersey">Jersey / Maille</option>
+                                <option value="jean">Jean / Denim</option>
+                                <option value="laine">Laine</option>
+                                <option value="lin">Lin</option>
+                                <option value="velours">Velours</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" id="generate-btn" class="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:shadow-xl hover:scale-[1.02] transition transform flex items-center justify-center space-x-2">
+                            <span id="btn-text">Générer le plan de coupe</span>
+                            <span id="btn-loader" class="loading hidden"></span>
+                        </button>
+                    </form>
+                </div>
+
+                <div class="space-y-6">
+                    <div class="glass rounded-2xl p-6 shadow-2xl">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="serif text-2xl font-bold text-gray-800">Aperçu du Patron</h3>
+                            <span id="pattern-status" class="px-3 py-1 bg-gray-200 text-gray-600 rounded-full text-sm font-medium">En attente</span>
+                        </div>
+                        <div id="pattern-canvas-container" class="pattern-canvas rounded-xl h-96 flex items-center justify-center relative overflow-hidden">
+                            <p class="text-gray-400 text-center">
+                                <svg class="w-16 h-16 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                Le plan de coupe apparaîtra ici
+                            </p>
+                        </div>
+                    </div>
+
+                    <div id="instructions-panel" class="glass rounded-2xl p-6 shadow-2xl hidden">
+                        <h3 class="serif text-2xl font-bold text-gray-800 mb-4">Instructions de Coupe</h3>
+                        <div id="instructions-content" class="space-y-4 max-h-96 overflow-y-auto pr-2"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="library-section" class="hidden">
+            <div class="glass rounded-2xl p-8 shadow-2xl">
+                <h2 class="serif text-3xl font-bold text-gray-800 mb-6">Bibliothèque de Modèles</h2>
+                <div id="saved-patterns" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="text-center py-12 text-gray-500">
+                        <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                        <p>Chargement...</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="guide-section" class="hidden">
+            <div class="glass rounded-2xl p-8 shadow-2xl">
+                <h2 class="serif text-3xl font-bold text-gray-800 mb-6">Guide des Mesures</h2>
+                <div class="grid md:grid-cols-2 gap-8">
+                    <div class="space-y-4">
+                        <h3 class="text-xl font-bold text-purple-900">Comment prendre vos mesures</h3>
+                        <div class="space-y-3">
+                            <div class="flex items-start space-x-3 p-3 bg-purple-50 rounded-lg">
+                                <span class="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">1</span>
+                                <div>
+                                    <p class="font-semibold">Tour de poitrine</p>
+                                    <p class="text-sm text-gray-600">Mesurez à la hauteur des pointes des épaules, en passant par la partie la plus large de la poitrine.</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start space-x-3 p-3 bg-purple-50 rounded-lg">
+                                <span class="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">2</span>
+                                <div>
+                                    <p class="font-semibold">Tour de taille</p>
+                                    <p class="text-sm text-gray-600">Mesurez à l'endroit le plus étroit du buste, généralement au-dessus du nombril.</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start space-x-3 p-3 bg-purple-50 rounded-lg">
+                                <span class="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">3</span>
+                                <div>
+                                    <p class="font-semibold">Tour de hanches</p>
+                                    <p class="text-sm text-gray-600">Mesurez la partie la plus large des hanches, environ 20cm en dessous de la taille.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gradient-to-br from-purple-100 to-blue-100 rounded-xl p-6 flex items-center justify-center">
+                        <div class="text-center">
+                            <svg class="w-32 h-32 mx-auto text-purple-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                            <p class="text-purple-800 font-medium">Schéma de mesures</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const API_URL = window.location.origin;
+
+        const categories = {
+            robe: { name: 'Robe', subcategories: [{ id: 'droite', name: 'Robe droite' }, { id: 'patineuse', name: 'Robe patineuse' }, { id: 'longue', name: 'Robe longue' }, { id: 'cocktail', name: 'Robe de cocktail' }, { id: 'chemise', name: 'Robe chemise' }], measurements: ['poitrine', 'taille', 'hanches', 'longueur', 'longueur_manche', 'tour_poignet'] },
+            haut: { name: 'Haut / Chemise', subcategories: [{ id: 'tshirt', name: 'T-shirt basique' }, { id: 'chemise_classique', name: 'Chemise classique' }, { id: 'blouse', name: 'Blouse fluide' }, { id: 'debardeur', name: 'Débardeur' }], measurements: ['poitrine', 'taille', 'longueur', 'longueur_manche', 'tour_poignet', 'tour_cou'] },
+            pantalon: { name: 'Pantalon', subcategories: [{ id: 'droit', name: 'Pantalon droit' }, { id: 'slim', name: 'Pantalon slim' }, { id: 'large', name: 'Pantalon large' }, { id: 'short', name: 'Short' }], measurements: ['tour_taille', 'tour_hanches', 'longueur_jambe', 'tour_cuisse', 'tour_mollet', 'hauteur_montant'] },
+            jupe: { name: 'Jupe', subcategories: [{ id: 'droite', name: 'Jupe droite' }, { id: 'plissee', name: 'Jupe plissée' }, { id: 'crayon', name: 'Jupe crayon' }, { id: 'courte', name: 'Mini-jupe' }, { id: 'longue', name: 'Jupe longue' }], measurements: ['tour_taille', 'tour_hanches', 'longueur_jupe', 'tour_genou'] },
+            ensemble: { name: 'Ensemble (2 pièces)', subcategories: [{ id: 'jupe_chemise', name: 'Jupe + Chemise' }, { id: 'pantalon_haut', name: 'Pantalon + Haut' }, { id: 'short_blouse', name: 'Short + Blouse' }], measurements: ['poitrine', 'taille', 'hanches', 'longueur_haut', 'longueur_bas', 'longueur_manche'] },
+            veste: { name: 'Veste / Manteau', subcategories: [{ id: 'blazer', name: 'Blazer' }, { id: 'trench', name: 'Trench' }, { id: 'gilet', name: 'Gilet' }], measurements: ['poitrine', 'taille', 'hanches', 'longueur', 'longueur_manche', 'tour_poignet', 'largeur_epaule'] }
+        };
+
+        const measurementLabels = { poitrine: 'Tour de poitrine', taille: 'Tour de taille', hanches: 'Tour de hanches', longueur: 'Longueur totale', longueur_manche: 'Longueur manche', tour_poignet: 'Tour de poignet', tour_cou: 'Tour de cou', tour_taille: 'Tour de taille', tour_hanches: 'Tour de hanches', longueur_jambe: 'Longueur jambe', tour_cuisse: 'Tour de cuisse', tour_mollet: 'Tour de mollet', hauteur_montant: 'Hauteur montant', longueur_jupe: 'Longueur jupe', tour_genou: 'Tour de genou', longueur_haut: 'Longueur haut', longueur_bas: 'Longueur bas', largeur_epaule: 'Largeur épaule' };
+
+        let currentPattern = null;
+        let uploadedImage = null;
+
+        document.addEventListener('DOMContentLoaded', () => { setupDragAndDrop(); loadPatterns(); });
+
+        function showSection(section) {
+            document.getElementById('hero').classList.add('hidden');
+            document.getElementById('create-section').classList.add('hidden');
+            document.getElementById('library-section').classList.add('hidden');
+            document.getElementById('guide-section').classList.add('hidden');
+            if (section === 'create') document.getElementById('create-section').classList.remove('hidden');
+            else if (section === 'library') { document.getElementById('library-section').classList.remove('hidden'); loadPatterns(); }
+            else if (section === 'guide') document.getElementById('guide-section').classList.remove('hidden');
+            else document.getElementById('hero').classList.remove('hidden');
+        }
+
+        function updateSubcategories() {
+            const category = document.getElementById('category').value;
+            const container = document.getElementById('subcategory-container');
+            const select = document.getElementById('subcategory');
+            const measurementsGrid = document.getElementById('measurements-grid');
+            if (!category) { container.classList.add('hidden'); measurementsGrid.innerHTML = ''; return; }
+            const catData = categories[category];
+            select.innerHTML = catData.subcategories.map(sub => `<option value="${sub.id}">${sub.name}</option>`).join('');
+            container.classList.remove('hidden');
+            measurementsGrid.innerHTML = catData.measurements.map(meas => `<div><label class="block text-xs font-medium text-gray-600 mb-1">${measurementLabels[meas]}</label><input type="number" id="meas-${meas}" placeholder="cm" class="w-full px-3 py-2 rounded border border-gray-300 focus:ring-2 focus:ring-purple-500 text-sm" required></div>`).join('');
+        }
+
+        function setupDragAndDrop() {
+            const zone = document.getElementById('upload-zone');
+            const input = document.getElementById('photo-upload');
+            zone.addEventListener('click', () => input.click());
+            zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragover'); });
+            zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+            zone.addEventListener('drop', (e) => { e.preventDefault(); zone.classList.remove('dragover'); if (e.dataTransfer.files.length) handleImageUpload({ target: { files: e.dataTransfer.files } }); });
+        }
+
+        async function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('image', file);
+            try {
+                const response = await fetch(`${API_URL}/api/upload`, { method: 'POST', body: formData });
+                const data = await response.json();
+                uploadedImage = data.url;
+                document.getElementById('upload-placeholder').classList.add('hidden');
+                const img = document.getElementById('preview-image');
+                img.src = uploadedImage;
+                img.classList.remove('hidden');
+            } catch (error) { alert('Erreur upload: ' + error.message); }
+        }
+
+        document.getElementById('pattern-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('generate-btn');
+            const btnText = document.getElementById('btn-text');
+            const btnLoader = document.getElementById('btn-loader');
+            btn.disabled = true;
+            btnText.textContent = 'Génération en cours...';
+            btnLoader.classList.remove('hidden');
+
+            const category = document.getElementById('category').value;
+            const subcategory = document.getElementById('subcategory').value;
+            const measurements = {};
+            categories[category].measurements.forEach(meas => { measurements[meas] = parseFloat(document.getElementById(`meas-${meas}`).value) || 0; });
+
+            try {
+                const response = await fetch(`${API_URL}/api/generate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category, subcategory, measurements, fabric: document.getElementById('fabric-type').value })
+                });
+                const cuttingPlan = await response.json();
+
+                currentPattern = {
+                    name: document.getElementById('model-name').value,
+                    category, subcategory,
+                    fabric: document.getElementById('fabric-type').value,
+                    measurements, pieces: cuttingPlan.pieces,
+                    fabricRequirements: cuttingPlan.fabricRequirements,
+                    sewingOrder: cuttingPlan.sewingOrder,
+                    tips: cuttingPlan.tips,
+                    image: uploadedImage,
+                    createdAt: new Date().toISOString()
+                };
+
+                await fetch(`${API_URL}/api/patterns`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(currentPattern)
+                });
+
+                document.getElementById('pattern-status').textContent = 'Généré';
+                document.getElementById('pattern-status').className = 'px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium';
+                renderPattern(currentPattern);
+                generateInstructions(currentPattern);
+                document.getElementById('instructions-panel').classList.remove('hidden');
+            } catch (error) { alert('Erreur: ' + error.message); }
+            finally { btn.disabled = false; btnText.textContent = 'Générer le plan de coupe'; btnLoader.classList.add('hidden'); }
+        });
+
+        function renderPattern(pattern) {
+            const container = document.getElementById('pattern-canvas-container');
+            const colors = ['#8B5CF6', '#EC4899', '#3B82F6', '#10B981', '#F59E0B', '#EF4444'];
+            let svgContent = `<svg viewBox="0 0 400 300" class="w-full h-full">`;
+            pattern.pieces.forEach((piece, index) => {
+                const color = colors[index % colors.length];
+                const offsetX = (index % 3) * 130 + 20;
+                const offsetY = Math.floor(index / 3) * 100 + 20;
+                svgContent += `<g transform="translate(${offsetX}, ${offsetY}) scale(0.8)" class="pattern-piece"><path d="${piece.svg}" fill="${color}20" stroke="${color}" stroke-width="2" stroke-dasharray="5,3"/><text x="${piece.width/2}" y="${piece.height/2}" text-anchor="middle" fill="${color}" font-size="12" font-weight="bold">${piece.name}</text><text x="${piece.width/2}" y="${piece.height/2 + 15}" text-anchor="middle" fill="#666" font-size="10">${piece.width.toFixed(1)}×${piece.height.toFixed(1)}cm</text></g>`;
+            });
+            svgContent += `</svg>`;
+            container.innerHTML = svgContent;
+        }
+
+        function generateInstructions(pattern) {
+            const container = document.getElementById('instructions-content');
+            let html = `<div class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded"><h4 class="font-bold text-blue-900 mb-2">Informations générales</h4><p class="text-sm text-blue-800">Modèle : ${pattern.name}</p><p class="text-sm text-blue-800">Type : ${categories[pattern.category].name}</p><p class="text-sm text-blue-800">Tissu nécessaire : ${pattern.fabricRequirements.length}cm x ${pattern.fabricRequirements.width}cm</p><p class="text-sm text-blue-800 mt-2">💡 ${pattern.tips}</p></div>`;
+            pattern.pieces.forEach((piece, index) => {
+                html += `<div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition"><div class="flex items-center justify-between mb-2"><h4 class="font-bold text-gray-800">Pièce ${index + 1} : ${piece.name}</h4><span class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">${piece.width.toFixed(1)} × ${piece.height.toFixed(1)} cm</span></div><ul class="space-y-1">${piece.instructions.map(inst => `<li class="text-sm text-gray-600 flex items-start"><span class="text-purple-500 mr-2">•</span>${inst}</li>`).join('')}</ul></div>`;
+            });
+            html += `<div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded mt-4"><h4 class="font-bold text-yellow-900 mb-2">Ordre de couture</h4><ol class="list-decimal list-inside text-sm text-yellow-800 space-y-1">${pattern.sewingOrder.map(step => `<li>${step}</li>`).join('')}</ol></div>`;
+            container.innerHTML = html;
+        }
+
+        async function loadPatterns() {
+            try {
+                const response = await fetch(`${API_URL}/api/patterns`);
+                const patterns = await response.json();
+                const container = document.getElementById('saved-patterns');
+                if (patterns.length === 0) { container.innerHTML = `<div class="col-span-full text-center py-12 text-gray-500"><svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg><p>Aucun modèle sauvegardé</p></div>`; return; }
+                container.innerHTML = patterns.map((p, idx) => `<div class="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition"><div class="h-48 bg-gray-100 flex items-center justify-center">${p.image ? `<img src="${p.image}" class="w-full h-full object-cover">` : `<svg class="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>`}</div><div class="p-4"><h3 class="font-bold text-gray-800 mb-1">${p.name}</h3><p class="text-sm text-gray-600 mb-2">${categories[p.category].name} • ${new Date(p.createdAt).toLocaleDateString('fr-FR')}</p><div class="flex space-x-2"><button onclick="viewPattern('${p.id}')" class="flex-1 bg-purple-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-purple-700 transition">Ouvrir</button><button onclick="deletePattern('${p.id}')" class="px-3 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition">×</button></div></div></div>`).join('');
+            } catch (error) { console.error('Erreur chargement:', error); }
+        }
+
+        async function viewPattern(id) {
+            try {
+                const response = await fetch(`${API_URL}/api/patterns/${id}`);
+                const pattern = await response.json();
+                currentPattern = pattern;
+                showSection('create');
+                renderPattern(pattern);
+                generateInstructions(pattern);
+                document.getElementById('instructions-panel').classList.remove('hidden');
+                document.getElementById('pattern-status').textContent = 'Chargé';
+                document.getElementById('pattern-status').className = 'px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium';
+            } catch (error) { alert('Erreur chargement'); }
+        }
+
+        async function deletePattern(id) {
+            if (!confirm('Supprimer ce modèle ?')) return;
+            try {
+                await fetch(`${API_URL}/api/patterns/${id}`, { method: 'DELETE' });
+                loadPatterns();
+            } catch (error) { alert('Erreur suppression'); }
+        }
+    </script>
+</body>
+</html>
